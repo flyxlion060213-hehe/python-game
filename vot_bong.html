@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Vợt Bóng (Pong) - Web</title>
+  <style>
+    :root{--bg:#1e5a7a;--bat:#20b2aa;--ball:#ff69b4;--text:#ffffff}
+    body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;background:linear-gradient(180deg,#0b3b4b, #123f52);font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    #gameWrap{background:var(--bg);padding:12px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+    canvas{display:block;border-radius:6px;background:radial-gradient(circle at 20% 10%, #2c9cb8, #1c5c70)}
+    #hud{color:var(--text);text-align:center;margin-top:8px}
+    button{padding:8px 12px;border-radius:6px;border:none;background:#fff;color:#123;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div id="gameWrap">
+    <canvas id="game" width="750" height="500"></canvas>
+    <div id="hud">Điểm: <span id="score">0</span> &nbsp; <button id="reset">Reset</button></div>
+  </div>
+
+  <script>
+    // Chuyển từ phiên bản tkinter -> HTML/JS (đã giảm tốc độ bóng)
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const resetBtn = document.getElementById('reset');
+
+    const W = canvas.width, H = canvas.height;
+
+    // Thiết lập (đã giảm tốc độ bóng và tốc độ vợt)
+    let bat = {w:40, h:10, x:10, y: H - 40, speed: 4}; // batSpeed giảm từ 6 -> 4
+    let ball = {r:6, x:20, y: H - 50, vx:2, vy:-2}; // ballMoveX/Y giảm từ 4 -> 2
+
+    let leftPressed = false, rightPressed = false;
+    let score = 0;
+
+    function drawBat(){
+      ctx.fillStyle = 'darkturquoise';
+      ctx.fillRect(bat.x, bat.y, bat.w, bat.h);
+    }
+    function drawBall(){
+      ctx.beginPath();
+      ctx.fillStyle = '#ff69b4';
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+      drawBat();
+      drawBall();
+    }
+
+    function moveBat(){
+      let mv = (rightPressed?1:0) - (leftPressed?1:0);
+      bat.x += mv * bat.speed;
+      if(bat.x < 0) bat.x = 0;
+      if(bat.x + bat.w > W) bat.x = W - bat.w;
+    }
+
+    let bounceCount = 0;
+    function moveBall(){
+      // tường trái/phải
+      if(ball.x + ball.vx + ball.r > W || ball.x + ball.vx - ball.r < 0){
+        ball.vx = -ball.vx;
+      }
+      // trần
+      if(ball.y + ball.vy - ball.r < 0){
+        ball.vy = -ball.vy;
+      }
+      // kiểm tra vợt
+      if(ball.vy > 0 && ball.y + ball.vy + ball.r >= bat.y){
+        if(ball.x + ball.r >= bat.x && ball.x - ball.r <= bat.x + bat.w){
+          ball.vy = -ball.vy;
+          score += 1;
+          bounceCount += 1;
+          // mỗi 4 lần bắt, tăng chút độ khó
+          if(bounceCount >= 4){
+            bounceCount = 0;
+            bat.speed += 1; // vợt nhanh hơn
+            // tăng tốc bóng theo hướng hiện tại
+            ball.vx += (ball.vx > 0 ? 0.5 : -0.5);
+            // giữ tốc độ y âm
+            ball.vy += (ball.vy > 0 ? 0.5 : -0.5);
+          }
+          updateScore();
+        }
+      }
+      // di chuyển
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+    }
+
+    function updateScore(){
+      scoreEl.textContent = score;
+    }
+
+    function checkGameOver(){
+      if(ball.y - ball.r > H){
+        const playAgain = confirm('Bạn thua! Điểm của bạn: ' + score + '\nBạn có muốn chơi lại?');
+        if(playAgain) reset(); else closeGame();
+      }
+    }
+
+    function reset(){
+      score = 0; bounceCount = 0;
+      bat.speed = 4;
+      ball.vx = 2; ball.vy = -2;
+      bat.x = 10;
+      ball.x = 20; ball.y = H - 50;
+      updateScore();
+      running = true; loop();
+    }
+
+    function closeGame(){
+      running = false;
+      // dừng vòng lặp, cho phép người chơi reload trang để bắt đầu
+    }
+
+    // sự kiện phím
+    window.addEventListener('keydown', e => {
+      if(e.key === 'ArrowLeft') leftPressed = true;
+      if(e.key === 'ArrowRight') rightPressed = true;
+    });
+    window.addEventListener('keyup', e => {
+      if(e.key === 'ArrowLeft') leftPressed = false;
+      if(e.key === 'ArrowRight') rightPressed = false;
+    });
+
+    resetBtn.addEventListener('click', reset);
+
+    let running = true;
+    function loop(){
+      if(!running) return;
+      moveBat();
+      moveBall();
+      draw();
+      checkGameOver();
+      requestAnimationFrame(loop);
+    }
+
+    // bắt đầu
+    updateScore();
+    requestAnimationFrame(loop);
+
+    // Hướng dẫn nhỏ: nếu muốn bóng chậm hơn nữa, chỉnh ball.vx/ball.vy xuống (ví dụ 1.5 hoặc 1)
+  </script>
+</body>
+</html>

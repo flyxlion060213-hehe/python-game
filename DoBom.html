@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DoBom - Né Bom (Minesweeper đơn giản)</title>
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; background:#f0f4f8; display:flex; gap:20px; align-items:flex-start; padding:24px; }
+  .card { background:white; border-radius:12px; box-shadow:0 6px 18px rgba(10,20,30,0.08); padding:18px; }
+  h1 { margin:0 0 8px 0; font-size:18px; }
+  #board { display:grid; grid-template-columns: repeat(10, 36px); gap:6px; margin-top:10px; }
+  .cell { width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg,#2e7d32,#1b5e20); color:transparent; border-radius:6px; cursor:pointer; user-select:none; font-weight:700; box-shadow: inset 0 -2px rgba(0,0,0,0.2); }
+  .cell.revealed { background: #ddd; color: black; cursor:default; box-shadow:none; }
+  .cell.bomb { background:#d32f2f !important; color:white; }
+  .controls { display:flex; gap:8px; align-items:center; margin-top:12px; }
+  button { padding:8px 12px; border-radius:8px; border: none; background:#1976d2; color:white; cursor:pointer; }
+  .info { margin-left:8px; color:#333; }
+  .small { font-size:13px; color:#555; margin-top:6px; }
+  footer { margin-top:12px; font-size:13px; color:#666; }
+</style>
+</head>
+<body>
+  <div class="card" style="width:420px;">
+    <h1>DoBom — Né Bom (bản web)</h1>
+    <div class="small">Mạng lưới 10x10, ~20% ô có bom. Bấm để mở ô an toàn. Nếu dẫm bom → thua.</div>
+    <div class="controls">
+      <button id="newBtn">Chơi lại</button>
+      <div class="info">Điểm: <span id="score">0</span></div>
+      <div class="info">Ô an toàn còn lại: <span id="left">0</span></div>
+    </div>
+    <div id="board"></div>
+    <footer>Được chuyển từ DoBom.py — mở file trong trình duyệt để chơi.</footer>
+  </div>
+
+  <div class="card" style="padding:14px; min-width:220px;">
+    <h1>Hướng dẫn nhanh</h1>
+    <ul>
+      <li>Bấm 1 lần vào ô để mở.</li>
+      <li>Số hiển thị là số bom xung quanh ô (8 ô lân cận).</li>
+      <li>Nếu mở toàn bộ ô an toàn: chiến thắng.</li>
+      <li>Nếu dẫm bom: thua.</li>
+    </ul>
+    <div class="small">Bạn có thể tải file này về và mở bằng trình duyệt (Chrome/Firefox) — không cần server.</div>
+  </div>
+
+<script>
+(function(){
+  const ROWS = 10, COLS = 10;
+  const BOMB_RATE = 0.20; // 20%
+  let board = [];
+  let gameOver = false;
+  let score = 0;
+  let safeLeft = 0;
+
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  const leftEl = document.getElementById('left');
+  const newBtn = document.getElementById('newBtn');
+
+  function createBoard() {
+    board = [];
+    safeLeft = 0;
+    gameOver = false;
+    score = 0;
+    boardEl.innerHTML = '';
+    for (let r=0; r<ROWS; r++){
+      const row = [];
+      for (let c=0; c<COLS; c++){
+        const isBomb = Math.random() < BOMB_RATE;
+        row.push({ bomb: isBomb, revealed: false, flagged:false });
+        if (!isBomb) safeLeft++;
+        const div = document.createElement('div');
+        div.className = 'cell';
+        div.dataset.r = r;
+        div.dataset.c = c;
+        div.addEventListener('click', onCellClick);
+        boardEl.appendChild(div);
+      }
+      board.push(row);
+    }
+    updateUI();
+  }
+
+  function updateUI(){
+    scoreEl.textContent = score;
+    leftEl.textContent = safeLeft;
+  }
+
+  function neighbors(r,c){
+    const res = [];
+    for (let rr=Math.max(0,r-1); rr<=Math.min(ROWS-1,r+1); rr++){
+      for (let cc=Math.max(0,c-1); cc<=Math.min(COLS-1,c+1); cc++){
+        if (rr===r && cc===c) continue;
+        res.push([rr,cc]);
+      }
+    }
+    return res;
+  }
+
+  function countBombsAround(r,c){
+    let t=0;
+    neighbors(r,c).forEach(([rr,cc]) => { if (board[rr][cc].bomb) t++; });
+    return t;
+  }
+
+  function reveal(r,c){
+    if (gameOver) return;
+    const cellData = board[r][c];
+    const index = r * COLS + c;
+    const el = boardEl.children[index];
+    if (cellData.revealed) return;
+    cellData.revealed = true;
+    el.classList.add('revealed');
+    if (cellData.bomb){
+      el.classList.add('bomb');
+      el.textContent = "💣";
+      endGame(false);
+      return;
+    }
+    const bombs = countBombsAround(r,c);
+    el.textContent = bombs>0 ? bombs : '';
+    // color numbers similarly to original
+    if (bombs > 0){
+      if (bombs == 1) el.style.color = 'blue';
+      else if (bombs == 2) el.style.color = 'green';
+      else if (bombs == 3) el.style.color = 'orange';
+      else if (bombs == 4) el.style.color = 'purple';
+      else el.style.color = 'red';
+    }
+    safeLeft--;
+    score++;
+    updateUI();
+    if (safeLeft === 0){
+      endGame(true);
+      return;
+    }
+    // if bombs == 0, auto-reveal adjacent
+    if (bombs === 0){
+      neighbors(r,c).forEach(([rr,cc]) => reveal(rr,cc));
+    }
+  }
+
+  function onCellClick(e){
+    const r = parseInt(e.currentTarget.dataset.r,10);
+    const c = parseInt(e.currentTarget.dataset.c,10);
+    if (gameOver) return;
+    reveal(r,c);
+  }
+
+  function endGame(win){
+    gameOver = true;
+    if (!win){
+      // reveal all bombs
+      for (let r=0; r<ROWS; r++){
+        for (let c=0; c<COLS; c++){
+          if (board[r][c].bomb){
+            const index = r*COLS + c;
+            const el = boardEl.children[index];
+            el.classList.add('revealed','bomb');
+            el.textContent = '💣';
+          }
+        }
+      }
+      setTimeout(()=> alert('Game over! Bạn đã giẫm phải bom. Điểm của bạn: ' + score), 50);
+    } else {
+      setTimeout(()=> alert('Chúc mừng! Bạn đã tìm thấy các ô an toàn! Số điểm của bạn: ' + score), 50);
+    }
+  }
+
+  newBtn.addEventListener('click', createBoard);
+
+  createBoard();
+
+})();
+</script>
+</body>
+</html>
